@@ -1,0 +1,39 @@
+* RefProtDB
+
+  Downloads reference sequences from NCBI for given organism(s) as specified by
+  the input taxon id(s).
+  The records are mapped to gene identifiers and reduced to this level.
+  If there are multiple protein accessions that map to the same gene identifier, then the
+  highest NP accession number is used if available, otherwise the highest XP
+  accession number is used.
+  This mapping is performed through NCBI's gene2accession file.
+  Additionally, homologene information is included if available.
+
+  Here is an example of what a header looks like in the output.
+  #+BEGIN_EXAMPLE
+  >geneid|91703|ref|NP_542389.1|taxon|9606|gi|18087825|homologene|12401| N-acyl-aromatic-L-amino acid amidohydrolase (carboxylate-forming) [Homo sapiens]
+  #+END_EXAMPLE
+
+** License
+   TODO : add license
+
+** Dependencies
+   python3, pandas, numpy
+
+** Installation
+   #+BEGIN_SRC bash
+   git clone https://github.com/asalt/RefProtDB.git
+   cd RefProtDB
+   pip install .
+   #+END_SRC
+
+
+** Execution
+  Running the program is straightforward:
+  #+BEGIN_SRC bash
+  RefProtDB --outdir /path/to/save/output/ 9606 10090 > programlog.txt  # this last part is optional
+  #+END_SRC
+  3 files will be generated here.
+  A combined fasta file with both taxa, a fasta file with only human, and a
+  fasta file with only mouse.
+  If this splitting is not desired, the =--no-split= flag can be passed.

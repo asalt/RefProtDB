@@ -1,0 +1,62 @@
+*.sqlite3
+*.log
+*.aux
+*.pdf
+*.gz
+*.tex
+*.p
+*~
+*.*#
+.DS_Store
+*.egg-info/
+testresults/
+*.pyc
+.fuse*
+
+# virtualenv
+.venv
+venv/
+ENV/
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
