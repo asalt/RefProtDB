@@ -116,7 +116,6 @@ def sniff_fasta(fasta):
     counter = 0
     REQUIRED = ('ref', 'sequence')
     while counter < nrecs:
-        import ipdb; ipdb.set_trace()
         for rec in fasta:
             if any(x not in rec for x in REQUIRED):
                 raise ValueError('Invalid input FASTA')
