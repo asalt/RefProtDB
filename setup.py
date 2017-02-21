@@ -13,6 +13,7 @@ package_version = calculate_version('./RefProtDB/_version.py')
 setup(
     name='RefProtDB',
     version=package_version,
+    author='Alex Saltzman',
     packages=find_packages(),
     install_requires=[
         'Click',

@@ -125,7 +125,7 @@ def gene2accession_formatter(tokeep : list, g2afile):
     tokeep = [str(x) for x in tokeep]
     path, _ = os.path.split(g2afile)
     outfile = os.path.join(path, 'g2a_filtered.tab')
-    fieldnames = ['TaxonID', 'GeneID', 'ProteinAccession', 'ProteinGI']
+    fieldnames = ['TaxonID', 'GeneID', 'ProteinAccession', 'ProteinGI', 'Symbol']
 
     with open(g2afile) as csvfile, open(outfile, 'w') as outf:
         reader = csv.DictReader(csvfile, delimiter='\t')
@@ -142,6 +142,7 @@ def gene2accession_formatter(tokeep : list, g2afile):
                 GeneID           = row['GeneID'],
                 ProteinAccession = protacc,
                 ProteinGI        = row['protein_gi'],
+                Symbol           = row['Symbol']
                 )
             writer.writerow(outrow)
     return outfile
@@ -158,12 +159,12 @@ def load_reference_data(g2a_file, hgene_file):
                             names=('Homologene', 'TaxonID', 'GeneID',
                                    'Symbol', 'ProteinGI', 'ProteinAccession'))
               .assign(acc_short = lambda x: x.ProteinAccession.str.extract('(\w+)\.', expand=False))
-              .filter(regex='[^ProteinAccession]')
+              .filter(regex='[^ProteinAccession|^Symbol]')
     )
     merge = pd.merge(g2a_df, hid_df, on=['TaxonID', 'GeneID', 'ProteinGI', 'acc_short'], how='left')
     return merge
 
-def download_all(orgs : dict, outdir='.', split=True, *args, **kwargs):
+def download_all(orgs : dict, outdir='.', split=True, input_fasta=None, *args, **kwargs):
     """ orgs is the subdict with the organisms desired
     e.g.: 9606: 'Homo_Sapiens', 10090: 'Mus_musculus'
     """
@@ -179,7 +180,10 @@ def download_all(orgs : dict, outdir='.', split=True, *args, **kwargs):
 
         ref_df = load_reference_data(filtered_g2a, hgene_file)  # protein_accession ->
 
-        fasta_file = os.path.join(tmpdir, 'protein.fa')
+        if input_fasta is not None:
+            fasta_file = os.path.join(tmpdir, 'protein.fa')
+        else:
+            fasta_file = input_fasta
         fasta = fasta_dict_from_file(fasta_file)  # a generator that yields a dictionary of records
         gid_hid = (ref_df[['GeneID', 'Homologene']]
                    .dropna(subset=['Homologene'])
@@ -194,7 +198,7 @@ def download_all(orgs : dict, outdir='.', split=True, *args, **kwargs):
         records = Records()
         for record in fasta:
             acc = record['ref']
-            m = acc_short_regex.match(record['ref'])
+            m = acc_short_regex.match(acc)
             if m:
                 acc = m.group(1)
             else:
@@ -205,14 +209,14 @@ def download_all(orgs : dict, outdir='.', split=True, *args, **kwargs):
             except KeyError:
                 print('No gene 2 accession info for {}'.format(record['ref']))
                 continue
-            if len(g2a_recs) > 1:
-                break
             for g2a_rec in g2a_recs:
                 hgene = gid_hid.get(g2a_rec['GeneID'], '-')
+                symbol = g2a_rec['Symbol']
                 record['geneid'] = g2a_rec['GeneID']
                 record['taxon'] = g2a_rec['TaxonID']
                 record['ref'] = g2a_rec['ProteinAccession']  # includes the `.X` after the accession
                 record['homologene'] = hgene
+                record['symbol'] = symbol if bool(symbol) else None
                 r = Record(**record)
                 records += r
         saved_records = 0

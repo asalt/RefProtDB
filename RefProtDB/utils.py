@@ -2,6 +2,12 @@ import os
 import re
 from datetime import datetime
 from functools import wraps
+import difflib
+
+import pandas as pd
+import click
+
+from .containers import FASTA_FMT
 
 def print_msg(*msg, end='...'):
     def deco(func):
@@ -17,7 +23,9 @@ def print_msg(*msg, end='...'):
 # heavily inspired and borrowed
 # by https://github.com/jorvis/biocode/blob/master/lib/biocode/utils.py#L149
 # Joshua Orvis
-def fasta_dict_from_file(fasta_file):
+
+
+def _fasta_dict_from_file(file_object):
     """
     Reads a file of FASTA entries and returns a dict for each entry.
     It parsers the headers such that `>gi|12345|ref|NP_XXXXX| Description`
@@ -28,7 +36,7 @@ def fasta_dict_from_file(fasta_file):
     current_seq = ''
     current_header = None
     pat = re.compile('>(\S+)\s*(.*)')
-    header_pat = re.compile(r'(\w+)\|(\w+\.?\w*)')
+    header_pat = re.compile(r'(\w+)\|(\w+\.?\w*)?')
 
     def parse_header(header):
         keys = header_pat.findall(header)
@@ -38,7 +46,7 @@ def fasta_dict_from_file(fasta_file):
             # gi -> ProteinGI #, ref -> NP_XXXX
         return header_data
 
-    for line in open(fasta_file):
+    for line in file_object:
         line = line.rstrip()
         m = pat.search(line)
         if m:
@@ -48,7 +56,8 @@ def fasta_dict_from_file(fasta_file):
                 current_seq = ''.join(current_seq.split())
                 current_id['sequence'] = current_seq
                 yield current_id
-                current_id.clear()
+                # current_id.clear()  # this is actually bad for list comprehensions
+                                      # as it returns empty dictionaries
 
             current_seq = ''
             header = m.group(1)
@@ -64,3 +73,52 @@ def fasta_dict_from_file(fasta_file):
     current_seq = ''.join(current_seq.split())
     current_id['sequence'] = current_seq
     yield current_id
+
+def fasta_dict_from_file(fasta_file):
+    with open(fasta_file, 'r') as f:
+        yield from _fasta_dict_from_file(f)
+fasta_dict_from_file.__doc__ = _fasta_dict_from_file.__doc__
+
+def convert_tab_to_fasta(tabfile):
+    HEADERS = ('geneid', 'ref', 'gi', 'homologene', 'taxon', 'description', 'sequence')
+    CUTOFF = .35
+    df = pd.read_table(tabfile)
+    choices = click.Choice([x for y in [df.columns, ['SKIP']] for x in y])
+    col_names = dict()
+    for h in HEADERS:
+        closest_match = difflib.get_close_matches(h, df.columns, n=1, cutoff=CUTOFF)
+        if closest_match:
+            col_names[h] = closest_match[0]
+        else:
+            print("Can not find header match for :", h)
+            print("Choose from :", ' '.join(choices.choices))
+            choice = click.prompt("Selected the correct name or SKIP",
+                                  type=choices, show_default=True, err=True,
+                                  default='SKIP')
+            col_names[h] = choice
+            print()
+    for _, series in df.iterrows():
+        row = series.to_dict()
+        gid = row.get( col_names['geneid'], '')
+        ref = row.get( col_names['ref'], '')
+        hid = row.get( col_names['homologene'], '')
+        gi = row.get( col_names['gi'], '')
+        taxon = row.get( col_names['taxon'], '')
+        desc = row.get( col_names['description'], ' ')
+        seq = row.get( col_names['sequence'], ' ')
+        r = dict(gid=gid, ref=ref, taxons=taxon, gis=gi, homologene=hid, description=desc, seq=seq)
+        yield(FASTA_FMT.format(**r))
+
+
+def sniff_fasta(fasta):
+    nrecs = 1
+    fasta = fasta_dict_from_file(fasta)
+    counter = 0
+    REQUIRED = ('ref', 'sequence')
+    while counter < nrecs:
+        import ipdb; ipdb.set_trace()
+        for rec in fasta:
+            if any(x not in rec for x in REQUIRED):
+                raise ValueError('Invalid input FASTA')
+        counter += 1
+    return 0  # all good

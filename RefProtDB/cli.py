@@ -9,6 +9,7 @@ import click
 
 from . import _version
 from .download_utils import download_all
+from .utils import convert_tab_to_fasta, print_msg, sniff_fasta
 
 
 __author__ = 'Alexander B. Saltzman, Bhoomi Bhatt, Anna Malovannaya'
@@ -27,7 +28,32 @@ ORGANISMS = {
     10090 : 'Mus_musculus',
 }
 
-@click.command(context_settings=CONTEXT_SETTINGS)
+@click.group(name='main')
+@click.version_option(__version__)
+def cli():
+    pass
+
+
+@cli.command(context_settings=CONTEXT_SETTINGS)
+@click.argument('tabfile', type=click.File('r'))
+def convert(tabfile):
+    """Convert tab file to fasta"""
+    outname, _ = os.path.splitext(tabfile.name)
+    outname += '.fa'
+    with open(outname, 'w') as outfile:
+        for record in convert_tab_to_fasta(tabfile):
+            outfile.write(record)
+            outfile.write('\n')
+    print('Successfully created', outname, 'from', tabfile.name)
+
+
+
+@cli.command(context_settings=CONTEXT_SETTINGS)
+@click.option('--input-fasta', type=click.Path(exists=True),
+              default=None, show_default=True,
+              help='Pass in the file of a previously downloaded fasta file'
+              'Must have protein accession (ref) )'
+)
 @click.option('-o', '--outdir', type=click.Path(exists=True),
               default='.', show_default=True)
 @click.option('--split/--no-split', default=True,
@@ -36,7 +62,11 @@ ORGANISMS = {
               show_default=True)
 @click.version_option(__version__)
 @click.argument('taxonids', nargs=-1, type=int)
-def cli(outdir, split, taxonids):
+def download(outdir, split, taxonids, input_fasta):
+    if input_fasta:
+        sniff_fasta(input_fasta)  # raises ValueError if not valid input
+
+    """Download and format a fasta file from NCBI"""
     orgs = dict()
     for taxon in taxonids:
         if taxon not in ORGANISMS:

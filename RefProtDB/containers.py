@@ -1,6 +1,10 @@
 import re
 from collections import defaultdict
 
+
+# FASTA_FMT = """>geneid|{gid}|ref|{ref}|taxon|{taxons}|gi|{gis}|homologene|{homologene}| {description}\n{seq}"""
+FASTA_FMT = """>gi|{gis}|ref|{ref}|geneid|{gid}|homologene|{homologene}|taxon|{taxons}|symbol|{symbols} {description}\n{seq}"""
+
 digit = re.compile(r'(\d+)')
 
 def digit_flag(text):
@@ -66,18 +70,18 @@ class Record:
         gis = self.ref[top_ref_key]['gi']
         homologenes = self.ref[top_ref_key]['homologene']
         descriptions = self.ref[top_ref_key]['description']
-        symbols = self.ref[top_ref_key]['symbol']
+        symbols = [x for x in self.ref[top_ref_key]['symbol'] if x]
         out = {
-            'top_ref' : top_ref_key,
+            'ref' : top_ref_key,
             'gis' : ';'.join(map(str, gis)),
             'taxons' : ';'.join(map(str, self.taxon)),  # should only be 1
             'homologene' : ';'.join(map(str, homologenes)),
             'gid' : self.geneid,
             'seq' : self.sequence,
-            'description' : ';'.join(descriptions)
+            'description' : ';'.join(descriptions),
+            'symbols' : ';'.join(map(str, symbols))
         }
-        fmt = """>geneid|{gid}|ref|{top_ref}|taxon|{taxons}|gi|{gis}|homologene|{homologene}| {description}\n{seq}"""
-        return fmt.format(**out)
+        return FASTA_FMT.format(**out)
 
 class Records(dict):
     def __iadd__(self, record):
