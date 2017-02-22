@@ -180,7 +180,7 @@ def download_all(orgs : dict, outdir='.', split=True, input_fasta=None, *args, *
 
         ref_df = load_reference_data(filtered_g2a, hgene_file)  # protein_accession ->
 
-        if input_fasta is not None:
+        if input_fasta is None:
             fasta_file = os.path.join(tmpdir, 'protein.fa')
         else:
             fasta_file = input_fasta
