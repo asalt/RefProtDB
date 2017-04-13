@@ -10,6 +10,7 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import click
 
 from .utils import fasta_dict_from_file, print_msg
 from .containers import Record, Records
@@ -93,9 +94,15 @@ def unzip(inputf, outputf, append=False):
 #     return os.path.join(path, '{}_{}'.format(identifier, name))
 
 def download_refseq(orgname, tmpdir, append=False):
-    target = find_file(orgname, conn=CONN)
+    target = None
+    if orgname is not None:
+        target = find_file(orgname, conn=CONN)
     if target is None:
-        raise ValueError("Could not find RefSeq for {} at {}/genomes".format(orgname, CONN))
+        c = click.confirm("Could not find RefSeq for {} at {}/genomes, would you like to continue?".format(orgname, CONN), err=True)
+        if c:
+            return
+        else:
+            raise ValueError
     gzfile = ftp_download(target, outdir=tmpdir, conn=CONN)
     # unzippedf = get_unzipped_fname(gzfile, orgname)
     unzippedf, _ = os.path.splitext(gzfile)

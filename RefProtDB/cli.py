@@ -76,4 +76,8 @@ def download(outdir, split, taxonids, input_fasta):
             orgs[taxon] = name
             continue
         orgs[taxon] = ORGANISMS[taxon]
+    if input_fasta:
+        taxonid = click.prompt("Enter the approprate taxon id for your input file", err=True)
+        orgs[taxonid] = None
+
     download_all(orgs, outdir=outdir, split=split, input_fasta=input_fasta)
