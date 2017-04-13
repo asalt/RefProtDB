@@ -76,4 +76,4 @@ def download(outdir, split, taxonids, input_fasta):
             orgs[taxon] = name
             continue
         orgs[taxon] = ORGANISMS[taxon]
-    download_all(orgs, outdir=outdir,split=split)
+    download_all(orgs, outdir=outdir, split=split, input_fasta=input_fasta)

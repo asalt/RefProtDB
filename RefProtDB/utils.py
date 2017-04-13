@@ -4,6 +4,7 @@ from datetime import datetime
 from functools import wraps
 import difflib
 
+import numpy as np
 import pandas as pd
 import click
 
@@ -80,7 +81,7 @@ def fasta_dict_from_file(fasta_file):
 fasta_dict_from_file.__doc__ = _fasta_dict_from_file.__doc__
 
 def convert_tab_to_fasta(tabfile):
-    HEADERS = ('geneid', 'ref', 'gi', 'homologene', 'taxon', 'description', 'sequence')
+    HEADERS = ('geneid', 'ref', 'gi', 'homologene', 'taxon', 'description', 'sequence', 'symbol')
     CUTOFF = .35
     df = pd.read_table(tabfile)
     choices = click.Choice([x for y in [df.columns, ['SKIP']] for x in y])
@@ -105,8 +106,12 @@ def convert_tab_to_fasta(tabfile):
         gi = row.get( col_names['gi'], '')
         taxon = row.get( col_names['taxon'], '')
         desc = row.get( col_names['description'], ' ')
-        seq = row.get( col_names['sequence'], ' ')
-        r = dict(gid=gid, ref=ref, taxons=taxon, gis=gi, homologene=hid, description=desc, seq=seq)
+        seq = row.get( col_names['sequence'], '')
+        symbol = row.get( col_names['symbol'], '' )
+
+        hid = int(hid) if not np.isnan(hid) else ''
+
+        r = dict(gid=gid, ref=ref, taxons=taxon, gis=gi, homologene=hid, description=desc, seq=seq, symbols=symbol)
         yield(FASTA_FMT.format(**r))
 
 
