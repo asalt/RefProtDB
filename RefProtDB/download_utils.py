@@ -43,7 +43,8 @@ def find_file(target, conn='ftp.ncbi.nlm.nih.gov'):
     def get_file(dir_):
         """Try to find the protein file"""
         target = 'protein.fa.gz'
-        targetdir = os.path.join(dir_, 'protein')
+        # targetdir = os.path.join(dir_, 'protein')  # always posix style on ftp server
+        targetdir = '{}/{}'.format(dir_, 'protein')
         search = [x for x in ftp.nlst(targetdir) if target in x]
         if search and len(search) == 1:
             return search[0]
