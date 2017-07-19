@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from functools import wraps
 import difflib
+import textwrap
 
 import numpy as np
 import pandas as pd
@@ -26,12 +27,16 @@ def print_msg(*msg, end='...'):
 # Joshua Orvis
 
 
-def _fasta_dict_from_file(file_object):
+def _fasta_dict_from_file(file_object, header_search='specific'):
     """
     Reads a file of FASTA entries and returns a dict for each entry.
     It parsers the headers such that `>gi|12345|ref|NP_XXXXX| Description`
     returns as `{gi: 12345, ref: 'NP_XXXXX', description : 'Description'}`
     The sequence has all whitespace removed.
+
+    :header_search: One of `specific` or `general`
+    if `specific` tries to parse the header
+    if `general` just returns each whitespace separated header
     """
     current_id = dict()
     current_seq = ''
@@ -39,10 +44,10 @@ def _fasta_dict_from_file(file_object):
     pat = re.compile('>(\S+)\s*(.*)')
     header_pat = re.compile(r'(\w+)\|(\w+\.?\w*)?')
 
-    def parse_header(header):
+    def parse_header(header, pairs=True):
         keys = header_pat.findall(header)
         header_data = dict()
-        for key in keys:
+        for key in enumerate(keys):
             header_data[key[0]] = key[1]
             # gi -> ProteinGI #, ref -> NP_XXXX
         return header_data
@@ -62,7 +67,10 @@ def _fasta_dict_from_file(file_object):
 
             current_seq = ''
             header = m.group(1)
-            current_id = parse_header(header)
+            if header_search == 'specific':
+                current_id = parse_header(header)
+            elif header_search == 'general' :
+                current_id = dict(ID = header)
             current_id['description'] = m.group(2)
 
         else:
@@ -75,9 +83,9 @@ def _fasta_dict_from_file(file_object):
     current_id['sequence'] = current_seq
     yield current_id
 
-def fasta_dict_from_file(fasta_file):
+def fasta_dict_from_file(fasta_file, header_search='specific'):
     with open(fasta_file, 'r') as f:
-        yield from _fasta_dict_from_file(f)
+        yield from _fasta_dict_from_file(f, header_search=header_search)
 fasta_dict_from_file.__doc__ = _fasta_dict_from_file.__doc__
 
 def convert_tab_to_fasta(tabfile):
@@ -88,7 +96,7 @@ def convert_tab_to_fasta(tabfile):
     col_names = dict()
     for h in HEADERS:
         closest_match = difflib.get_close_matches(h, df.columns, n=1, cutoff=CUTOFF)
-        if closest_match:
+        if closest_match and h != 'homologene':
             col_names[h] = closest_match[0]
         else:
             print("Can not find header match for :", h)
@@ -106,10 +114,14 @@ def convert_tab_to_fasta(tabfile):
         gi = row.get( col_names['gi'], '')
         taxon = row.get( col_names['taxon'], '')
         desc = row.get( col_names['description'], ' ')
-        seq = row.get( col_names['sequence'], '')
+        seq = '\n'.join(textwrap.wrap(row.get( col_names['sequence'], '' ), width=70))
         symbol = row.get( col_names['symbol'], '' )
 
-        hid = int(hid) if not np.isnan(hid) else ''
+        hid = int(hid) if hid and not np.isnan(hid) else ''
+        try:
+            gid = int(gid)
+        except ValueError:
+            pass
 
         r = dict(gid=gid, ref=ref, taxons=taxon, gis=gi, homologene=hid, description=desc, seq=seq, symbols=symbol)
         yield(FASTA_FMT.format(**r))
