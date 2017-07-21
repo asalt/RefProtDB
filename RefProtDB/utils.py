@@ -38,6 +38,7 @@ def _fasta_dict_from_file(file_object, header_search='specific'):
     if `specific` tries to parse the header
     if `general` just returns each whitespace separated header
     """
+
     current_id = dict()
     current_seq = ''
     current_header = None
@@ -47,7 +48,7 @@ def _fasta_dict_from_file(file_object, header_search='specific'):
     def parse_header(header, pairs=True):
         keys = header_pat.findall(header)
         header_data = dict()
-        for key in enumerate(keys):
+        for key in keys:
             header_data[key[0]] = key[1]
             # gi -> ProteinGI #, ref -> NP_XXXX
         return header_data
@@ -69,8 +70,8 @@ def _fasta_dict_from_file(file_object, header_search='specific'):
             header = m.group(1)
             if header_search == 'specific':
                 current_id = parse_header(header)
-            elif header_search == 'general' :
-                current_id = dict(ID = header)
+            elif header_search == 'generic':
+                current_id = dict(header = header)
             current_id['description'] = m.group(2)
 
         else:
