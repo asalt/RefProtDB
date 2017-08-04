@@ -26,6 +26,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 ORGANISMS = {
     9606  : 'Homo_sapiens',
     10090 : 'Mus_musculus',
+    9031  : 'Gallus_gallus',
 }
 
 @click.group(name='main')
