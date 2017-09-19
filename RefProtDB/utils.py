@@ -83,10 +83,12 @@ fasta_dict_from_file.__doc__ = _fasta_dict_from_file.__doc__
 def convert_tab_to_fasta(tabfile):
     HEADERS = ('geneid', 'ref', 'gi', 'homologene', 'taxon', 'description', 'sequence', 'symbol')
     CUTOFF = .35
-    df = pd.read_table(tabfile)
+    df = pd.read_table(tabfile, dtype=str)
+    #res = np.genfromtxt(tabfile, dtype=str, delimiter='\t')
+    #df = pd.DataFrame(columns=res[0], data=res[1:])
     choices = click.Choice([x for y in [df.columns, ['SKIP']] for x in y])
     col_names = dict()
-    for h in HEADERS:
+    for h in HEADERS:   
         closest_match = difflib.get_close_matches(h, df.columns, n=1, cutoff=CUTOFF)
         if closest_match:
             col_names[h] = closest_match[0]
@@ -109,7 +111,8 @@ def convert_tab_to_fasta(tabfile):
         seq = row.get( col_names['sequence'], '')
         symbol = row.get( col_names['symbol'], '' )
 
-        hid = int(hid) if not np.isnan(hid) else ''
+        if isinstance(hid, (int, float)):
+            hid = int(hid) if not np.isnan(hid) else ''
 
         r = dict(gid=gid, ref=ref, taxons=taxon, gis=gi, homologene=hid, description=desc, seq=seq, symbols=symbol)
         yield(FASTA_FMT.format(**r))
