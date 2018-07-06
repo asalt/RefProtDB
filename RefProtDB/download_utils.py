@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import re
 import csv
@@ -128,7 +130,8 @@ def download_mappings(conn, tmpdir='.'):
     return g2a_unzipped, hgene_file
 
 @print_msg("Formatting gene2accession file")
-def gene2accession_formatter(tokeep : list, g2afile):
+def gene2accession_formatter(tokeep, g2afile):
+    # tokeep: list
 
     tokeep = [str(x) for x in tokeep]
     path, _ = os.path.split(g2afile)
@@ -172,7 +175,8 @@ def load_reference_data(g2a_file, hgene_file):
     merge = pd.merge(g2a_df, hid_df, on=['TaxonID', 'GeneID', 'ProteinGI', 'acc_short'], how='left')
     return merge
 
-def download_all(orgs : dict, outdir='.', split=True, input_fasta=None, *args, **kwargs):
+def download_all(orgs, outdir='.', split=True, input_fasta=None, *args, **kwargs):
+    # orgs: dict
     """ orgs is the subdict with the organisms desired
     e.g.: 9606: 'Homo_Sapiens', 10090: 'Mus_musculus'
     """

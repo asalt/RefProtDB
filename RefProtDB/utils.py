@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import re
 from datetime import datetime
@@ -5,13 +7,17 @@ from functools import wraps
 import difflib
 import textwrap
 
+import six
+
 import numpy as np
 import pandas as pd
 import click
 
 from .containers import FASTA_FMT
 
-def print_msg(*msg, end='...'):
+end = '...'
+
+def print_msg(*msg):
     def deco(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -34,7 +40,7 @@ def _fasta_dict_from_file(file_object, header_search='specific'):
     returns as `{gi: 12345, ref: 'NP_XXXXX', description : 'Description'}`
     The sequence has all whitespace removed.
 
-    :header_search: One of `specific` or `general`
+    :header_search: One of `specific` or `generic`
     if `specific` tries to parse the header
     if `general` just returns each whitespace separated header
     """
@@ -86,16 +92,24 @@ def _fasta_dict_from_file(file_object, header_search='specific'):
 
 def fasta_dict_from_file(fasta_file, header_search='specific'):
     with open(fasta_file, 'r') as f:
-        yield from _fasta_dict_from_file(f, header_search=header_search)
+        # yield from _fasta_dict_from_file(f, header_search=header_search)
+        for v in _fasta_dict_from_file(f, header_search=header_search):
+            yield v
 fasta_dict_from_file.__doc__ = _fasta_dict_from_file.__doc__
 
-def convert_tab_to_fasta(tabfile):
-    HEADERS = ('geneid', 'ref', 'gi', 'homologene', 'taxon', 'description', 'sequence', 'symbol')
+def convert_tab_to_fasta(tabfile, geneid=None, ref=None, gi=None, homologene=None, taxon=None,
+                         description=None, sequence=None, symbol=None):
+    HEADERS = {'geneid': geneid, 'ref': ref, 'gi': gi, 'homologene': homologene, 'taxon': taxon,
+               'description': description, 'sequence': sequence, 'symbol': symbol}
     CUTOFF = .35
-    df = pd.read_table(tabfile)
+    df = pd.read_table(tabfile, dtype=str)
     choices = click.Choice([x for y in [df.columns, ['SKIP']] for x in y])
     col_names = dict()
-    for h in HEADERS:
+    for h,v in HEADERS.items():
+        if v is not None or v=='SKIP':
+            col_names[h] = v
+            continue
+
         closest_match = difflib.get_close_matches(h, df.columns, n=1, cutoff=CUTOFF)
         if closest_match and h != 'homologene':
             col_names[h] = closest_match[0]
