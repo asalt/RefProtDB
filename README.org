@@ -14,9 +14,6 @@
   >geneid|91703|ref|NP_542389.1|taxon|9606|gi|18087825|homologene|12401| N-acyl-aromatic-L-amino acid amidohydrolase (carboxylate-forming) [Homo sapiens]
   #+END_EXAMPLE
 
-** License
-   TODO : add license
-
 ** Dependencies
    python3, pandas, numpy
 
