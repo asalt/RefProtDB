@@ -10,12 +10,17 @@ from ftplib import FTP
 from datetime import datetime
 from warnings import warn
 
+import six
+if six.PY2:
+    from backports import tempfile
+
 import numpy as np
 import pandas as pd
 import click
 
 from .utils import fasta_dict_from_file, print_msg
 from .containers import Record, Records
+
 
 CONN='ftp.ncbi.nlm.nih.gov'
 
@@ -181,7 +186,7 @@ def download_all(orgs, outdir='.', split=True, input_fasta=None, *args, **kwargs
     e.g.: 9606: 'Homo_Sapiens', 10090: 'Mus_musculus'
     """
     today = datetime.now().strftime("%Y_%m_%d")
-    fasta_output = 'PyGrouper_{}_refseq_{}.fa'.format('_'.join(map(str, orgs)),
+    fasta_output = 'gpGrouper_{}_refseq_{}.fa'.format('_'.join(map(str, orgs)),
                                                       today)
     fasta_output = os.path.join(outdir, fasta_output)
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -245,7 +250,7 @@ def download_all(orgs, outdir='.', split=True, input_fasta=None, *args, **kwargs
         for org in orgs:
             saved_records = 0
             org_ = str(org)
-            org_output = 'PyGrouper_{}_refseq_{}.fa'.format(org_, today)
+            org_output = 'gpGrouper_{}_refseq_{}.fa'.format(org_, today)
             org_output = os.path.join(outdir, org_output)
             print(datetime.now(), ": Writing {} ...".format(org_output), end='')
             with open(org_output, 'w') as f:
