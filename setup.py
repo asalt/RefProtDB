@@ -16,7 +16,7 @@ setup(
     author='Alex Saltzman',
     packages=find_packages(),
     install_requires=[
-        'Click',
+        'Click', 'backports.tempfile',
     ],
     entry_points="""
     [console_scripts]

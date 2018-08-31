@@ -1,7 +1,12 @@
 import os
 import sys
 import re
-from itertools import zip_longest
+import six
+if six.PY3:
+    from itertools import zip_longest
+elif six.PY2:
+    from itertools import izip_longest as zip_longest
+
 from getpass import getuser
 from datetime import datetime
 

@@ -21,7 +21,10 @@ def print_msg(*msg):
     def deco(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            print(datetime.now(), ':', *msg, end=end, flush=True)
+            if six.PY3:
+                print(datetime.now(), ':', *msg, end=end, flush=True)
+            elif six.PY2:
+                print(datetime.now(), ':', *msg, end=end)
             result = func(*args, **kwargs)
             print('done.')
             return result
