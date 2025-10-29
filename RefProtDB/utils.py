@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 end = "..."
 
+header_pat = re.compile(r"(\w+)\|([\w-]+)\|([\w\-]+)?")
+
 
 def print_msg(*msg):
     def deco(func):
@@ -38,12 +40,57 @@ def print_msg(*msg):
     return deco
 
 
+def parse_header(header):
+    """Parses a FASTA header, extracting relevant identifiers."""
+    TOKEEP = {
+        "gi",
+        "ref",
+        "geneid",
+        "symbol",
+        "taxon",
+        "sp",
+        "spid",
+        "spacc",
+        "spref",
+        "ENSG",
+        "ENST",
+        "ENSP",
+    }
+    keys = header_pat.findall(header)
+    header_data = {"raw_header": header}
+    uniprot_id = None
+
+    for key, value, extra in keys:
+        if key.startswith("rev"):
+            continue  # Ignore reverse/decoy entries
+        if key in {"sp", "tr"}:  # UniProt identifiers
+            uniprot_id = value
+            header_data["uniprot_id"] = uniprot_id
+            if extra:
+                header_data["uniprot_name"] = extra
+        elif key in TOKEEP:
+            header_data[key] = value
+
+    # Fetch Entrez ID if only UniProt ID is present
+    if uniprot_id and "geneid" not in header_data:
+        entrez_id = fetch_entrez_from_uniprot(uniprot_id)
+        if entrez_id:
+            header_data["geneid"] = entrez_id
+
+    return header_data
+
+
 # heavily inspired and borrowed
 # by https://github.com/jorvis/biocode/blob/master/lib/biocode/utils.py#L149
 # Joshua Orvis
 
 
-def _fasta_dict_from_file(file_object, header_search="specific"):
+def _fasta_dict_from_file(
+    file_object,
+    header_search="specific",
+    decoy_prefix="rev",
+    remove_decoys=True,
+):
     """
     Reads a file of FASTA entries and returns a dict for each entry.
     It parsers the headers such that `>gi|12345|ref|NP_XXXXX| Description`
@@ -58,12 +105,15 @@ def _fasta_dict_from_file(file_object, header_search="specific"):
     current_id = dict()
     current_seq = ""
     current_header = None
-    pat = re.compile(">(\S+)\s*(.*)")
-    header_pat = re.compile("(\\w+)\\|([\\w\\.-]+)?")
+    pat = re.compile(r">(\S+)\s*(.*)")
+    # old:
+    #header_pat = re.compile(r"(\w+)\|([\w\.-]+)?")
+    # new allows : inside a header name 
+    header_pat = re.compile(r"(\w+)\|([\w\.\-\:]+)?")
     # Explanation:
     # (\w+)       : Capture one or more word characters (letters, digits, or underscores).
     # \|          : Match the pipe character '|'.
-    # ([\w\.-]+)? : Capture zero or more word characters, dots, or dashes. This part is optional.
+    # ([\w\.-\:]+)? : Capture zero or more word characters, dots, or dashes or colons. This part is optional.
 
     def parse_header(header, pairs=True):
         TOKEEP = [
@@ -90,13 +140,14 @@ def _fasta_dict_from_file(file_object, header_search="specific"):
         for key, value in keys:
             # if key[1] == "geneid":
             header_data["raw_header"] = header
-            if key.startswith("rev"):
+            if key.startswith(decoy_prefix) and remove_decoys:
                 # decoy
                 continue
             if key not in TOKEEP:
                 if key not in invalid_keys:  # only warn once
                     invalid_keys.add(key)
-                    logger.warning(f"key {key} not in {TOKEEP}")
+                    # logger.warning(f"key {key} not in {TOKEEP}")
+                    continue
                 # You can continue to the next iteration if the key is not in TOKEEP
                 # skipping
             elif key in TOKEEP:
