@@ -7,6 +7,10 @@ from functools import wraps
 import difflib
 import textwrap
 import logging
+import hashlib
+import csv
+from collections import defaultdict
+from pathlib import Path
 
 import six
 
@@ -21,6 +25,218 @@ logger = logging.getLogger(__name__)
 end = "..."
 
 header_pat = re.compile(r"(\w+)\|([\w-]+)\|([\w\-]+)?")
+
+
+_GENERIC_DESCRIPTIONS = {
+    "hypothetical protein",
+    "putative protein",
+    "uncharacterized protein",
+    "predicted protein",
+}
+
+
+def _strip_trailing_organism(description):
+    if not description:
+        return ""
+    return re.sub(r"\s*\[[^\]]+\]\s*$", "", description).strip()
+
+
+def _clean_description(description):
+    desc = _strip_trailing_organism(description)
+    if not desc:
+        return ""
+    if desc.upper().startswith("MULTISPECIES:"):
+        desc = desc.split(":", 1)[1].strip()
+    desc = re.sub(r"(,?\s+partial)$", "", desc, flags=re.IGNORECASE).strip()
+    return re.sub(r"\s+", " ", desc).strip()
+
+
+def _slugify(text, max_length=64):
+    slug = re.sub(r"[^a-z0-9]+", "_", text.lower())
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    if not slug:
+        return ""
+    return slug[:max_length]
+
+
+def _meta_gene_key(description, raw_id):
+    raw_id = raw_id or ""
+    cleaned = _clean_description(description)
+    if not cleaned:
+        return f"raw:{raw_id}", raw_id
+    normalized = cleaned.lower()
+    if normalized in _GENERIC_DESCRIPTIONS:
+        return f"raw:{raw_id}", raw_id
+    return f"name:{normalized}", cleaned
+
+
+def _meta_gene_identifier(key, label):
+    label = label or key
+    prefix = "n" if key.startswith("name:") else "p"
+    slug = _slugify(label)
+    if not slug:
+        slug = hashlib.md5(label.encode("utf-8")).hexdigest()[:12]
+    return f"meta:{prefix}:{slug}"
+
+
+def _best_description(entries):
+    for entry in entries:
+        if entry.get("meta_gene_name"):
+            return entry["meta_gene_name"]
+    for entry in entries:
+        if entry.get("description"):
+            return entry["description"]
+    return ""
+
+
+def group_records_by_gene(records):
+    groups = defaultdict(list)
+    for record in records:
+        groups[record["geneid"]].append(record)
+    return groups
+
+
+def summarise_gene_group(geneid, entries):
+    description = _best_description(entries)
+    proteins = sorted(
+        {
+            entry.get("raw_id") or entry.get("ref")
+            for entry in entries
+            if entry.get("raw_id") or entry.get("ref")
+        }
+    )
+    descriptions = sorted({entry.get("description") for entry in entries if entry.get("description")})
+    source = next((entry.get("geneid_source") for entry in entries if entry.get("geneid_source")), "provided")
+    taxa = sorted({entry.get("taxon") for entry in entries if entry.get("taxon")})
+    return {
+        "geneid": geneid,
+        "meta_gene_name": description,
+        "geneid_source": source,
+        "count": len(proteins),
+        "descriptions": "|".join(descriptions),
+        "proteins": "|".join(proteins),
+        "taxa": "|".join(taxa),
+    }
+
+
+def summarise_gene_groups(groups):
+    return {geneid: summarise_gene_group(geneid, entries) for geneid, entries in groups.items()}
+
+
+def write_gene_summary(summaries, path):
+    if not summaries:
+        return
+    rows = sorted(summaries.values(), key=lambda r: (r["geneid"], r["meta_gene_name"]))
+    fieldnames = [
+        "geneid",
+        "meta_gene_name",
+        "geneid_source",
+        "count",
+        "descriptions",
+        "proteins",
+        "taxa",
+    ]
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def gene_histogram(summaries):
+    histogram = defaultdict(int)
+    for summary in summaries.values():
+        histogram[summary["count"]] += 1
+    return dict(sorted(histogram.items()))
+
+
+def write_gene_histogram(histogram, path):
+    if not histogram:
+        return
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["proteins_per_gene", "gene_count"]
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
+        writer.writeheader()
+        for size, count in histogram.items():
+            writer.writerow({"proteins_per_gene": size, "gene_count": count})
+
+
+def _aggregate_gene_metadata(geneid, entries):
+    description = _best_description(entries)
+    proteins = sorted(
+        {
+            entry.get("raw_id") or entry.get("ref")
+            for entry in entries
+            if entry.get("raw_id") or entry.get("ref")
+        }
+    )
+    refs = sorted(
+        {
+            entry.get("ref") or entry.get("raw_id")
+            for entry in entries
+            if entry.get("ref") or entry.get("raw_id")
+        }
+    )
+    gis = sorted({entry.get("gi") for entry in entries if entry.get("gi")})
+    symbols = sorted({entry.get("symbol") for entry in entries if entry.get("symbol")})
+    taxa = sorted({entry.get("taxon") for entry in entries if entry.get("taxon")})
+    homologenes = sorted({entry.get("homologene") for entry in entries if entry.get("homologene")})
+    representative = max(entries, key=lambda entry: len(entry.get("sequence", "")))
+    sequence = representative.get("sequence", "")
+    return {
+        "geneid": geneid,
+        "description": description,
+        "sequence": sequence,
+        "ref": "|".join(refs) if refs else representative.get("raw_id", ""),
+        "gi": "|".join(gis),
+        "symbol": "|".join(symbols),
+        "taxon": "|".join(taxa),
+        "homologene": "|".join(homologenes),
+        "proteins": "|".join(proteins),
+    }
+
+
+def gene_level_fasta(
+    fasta_path,
+    output_path,
+    header_search="specific",
+    summary_path=None,
+    histogram_path=None,
+):
+    records = list(fasta_dict_from_file(fasta_path, header_search=header_search))
+    groups = group_records_by_gene(records)
+    summaries = summarise_gene_groups(groups)
+    aggregated = {
+        geneid: _aggregate_gene_metadata(geneid, entries)
+        for geneid, entries in groups.items()
+    }
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w") as handle:
+        for geneid in sorted(aggregated):
+            meta = aggregated[geneid]
+            seq = "\n".join(textwrap.wrap(meta["sequence"], width=70))
+            record = FASTA_FMT.format(
+                ref=meta["ref"],
+                gis=meta["gi"],
+                gid=meta["geneid"],
+                homologene=meta["homologene"],
+                taxons=meta["taxon"],
+                description=meta["description"],
+                seq=seq,
+                symbols=meta["symbol"],
+            )
+            handle.write(record)
+            handle.write("\n")
+    if summary_path:
+        write_gene_summary(summaries, summary_path)
+    if histogram_path:
+        histogram = gene_histogram(summaries)
+        write_gene_histogram(histogram, histogram_path)
+    return aggregated, summaries
 
 
 def print_msg(*msg):
@@ -115,7 +331,24 @@ def _fasta_dict_from_file(
     # \|          : Match the pipe character '|'.
     # ([\w\.-\:]+)? : Capture zero or more word characters, dots, or dashes or colons. This part is optional.
 
-    def parse_header(header, pairs=True):
+    inferred_geneids = dict()
+
+    def assign_meta_geneid(record):
+        if record.get("geneid"):
+            return
+        raw_id_value = record.get("raw_id") or ""
+        key, label = _meta_gene_key(record.get("description", ""), raw_id_value)
+        meta_geneid = inferred_geneids.get(key)
+        if not meta_geneid:
+            meta_geneid = _meta_gene_identifier(key, label)
+            inferred_geneids[key] = meta_geneid
+        record["geneid"] = meta_geneid
+        record["meta_geneid"] = meta_geneid
+        record.setdefault("geneid_source", "inferred_name")
+        if key.startswith("name:"):
+            record.setdefault("meta_gene_name", label)
+
+    def parse_header(header, raw_header, raw_id, pairs=True):
         TOKEEP = [
             "gi",
             "ref",
@@ -135,11 +368,10 @@ def _fasta_dict_from_file(
 
         #     ipdb.set_trace()
         keys = header_pat.findall(header)
-        header_data = dict()
+        header_data = dict(raw_header=raw_header, raw_id=raw_id)
         invalid_keys = set()
         for key, value in keys:
             # if key[1] == "geneid":
-            header_data["raw_header"] = header
             if key.startswith(decoy_prefix) and remove_decoys:
                 # decoy
                 continue
@@ -171,11 +403,15 @@ def _fasta_dict_from_file(
 
             current_seq = ""
             header = m.group(1)
+            raw_header = line
+            raw_id = m.group(1)
             if header_search == "specific":
-                current_id = parse_header(header)
+                current_id = parse_header(header, raw_header, raw_id)
             elif header_search == "generic":
-                current_id = dict(raw_header=header)
+                current_id = dict(raw_header=raw_header, raw_id=raw_id)
             current_id["description"] = m.group(2)
+            current_id.setdefault("protein", current_id.get("ref") or raw_id)
+            assign_meta_geneid(current_id)
 
         else:
             ## python 2.6+ makes string concatenation amortized O(n)
